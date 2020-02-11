@@ -4,11 +4,11 @@
 echo "-------------- SCRIPT TO EXECUTE GI PIPELINE -----------------"
 
 # Assumed folder structure:
-#   ~/GI_Project_IramJazz
+#   ~/base
 #       /codes
 #       /data
-#           /images
-#           /cleaned
+#           /images, /cleaned, /cropped, /points
+
 
 dir=$(pwd)
 echo "Current directory (should be codes folder):   "$dir
@@ -55,7 +55,7 @@ python patient_select.py
 # output: ../data/cell_counter/*.png
 
 echo "STEP 2: RUN SCRIPTS ON ANNOTATION POINTS"
-python cell_annotator.py
+python qupath_points.py
 
 
 

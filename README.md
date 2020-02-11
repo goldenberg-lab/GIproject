@@ -11,6 +11,7 @@ Folder contains codes necessary to reproduce GI results. Assumed folder structur
 | | -- images
 | | -- (generated folders)
 | | -- (csv/xlsx with annotation)
+| | -- points
 | -- output 
 
 ```
