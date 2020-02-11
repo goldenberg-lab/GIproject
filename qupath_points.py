@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 SCRIPT TO PARSE THE QU-PATH POINTS
 """
@@ -10,10 +9,14 @@ import shutil
 import numpy as np
 import pandas as pd
 
-os.chdir('C:\\Users\\erik drysdale\\Documents\\projects\\GI')
+import seaborn as sns
+from matplotlib import pyplot as plt
+from PIL import Image
+
 dir_base = os.getcwd()
-dir_images = os.path.join(dir_base, 'images')
-dir_points = os.path.join(dir_base, 'points')
+dir_data = os.path.join(dir_base,'..','data')
+dir_cropped = os.path.join(dir_data,'cropped')
+dir_points = os.path.join(dir_data, 'points')
 
 def stopifnot(cond):
     if not cond:
@@ -47,15 +50,15 @@ def zip_points_parse(fn):
 ##################################
 ## --- (1) LOAD IN THE DATA --- ##
 
+# Get the points
 fn_points = os.listdir(dir_points)
-fn_images = os.listdir(dir_images)
-raw_points = pd.Series(fn_points).str.split('\\.',expand=True).iloc[:,0]
-raw_images = pd.Series(fn_images).str.split('\\.',expand=True).iloc[:,0]
-stopifnot(raw_points.isin(raw_images).all())
+raw_points = pd.Series(fn_points).str.split('_',expand=True).iloc[:,0:3].apply(lambda z: '_'.join(z), axis=1)
 
-import seaborn as sns
-from matplotlib import pyplot as plt
-from PIL import Image
+# Load the labels
+df_data = pd.read_csv(os.path.join(dir_data,'df_lbls_anon.csv'),usecols=['type','ID','file'])
+df_data['raw'] = df_data.file.str.replace('.png','')
+stopifnot(all(raw_points.isin(df_data.raw)))
+
 
 fig, axes = plt.subplots(nrows=len(fn_points),ncols=1,figsize=(10,20))
 
@@ -64,7 +67,13 @@ for ii, fn in enumerate(fn_points):
     path = os.path.join(dir_points, fn)
     df_ii = zip_points_parse(path)
     df_ii.cell = pd.Categorical(df_ii.cell,categories=valid_cells)
-    path_img = os.path.join(dir_images,fn.split('-')[0])
+    fold = '_'.join(fn.split('_')[0:3])
+    tissue = fold.split('_')[2]
+    tt = df_data[df_data.raw == fold]['type'].values[0]
+    file = df_data[df_data.raw == fold]['file'].values[0]
+    ID = df_data[df_data.raw == fold]['ID'].values[0]
+    nam = fn.replace('-points.zip','')
+    path_img = os.path.join(dir_cropped, tt, ID, tissue, nam)
     img_vals =  np.array(Image.open(path_img))
     axes[ii].imshow(img_vals)
     #axes.imshow(img_vals)
