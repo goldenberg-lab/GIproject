@@ -281,7 +281,8 @@ def update_output(contents):
         gray_ii = crop_image(img)
         return InteractiveImage(Image.fromarray(gray_ii)), 'asdf'
         
-    
+    else:
+        pass
 
 @app.callback([Output('zoom-window', 'figure'),
                Output('test-div-2', 'children')],
@@ -298,7 +299,7 @@ def update_zoom(zoom_location, img):
         # image = Image.fromarray(np.array(json.loads(img), dtype = 'uint8'))
         image = img
 
-        image['layout']['autosize'] = True
+        image['layout']['autosize'] = False
         image['layout']['xaxis'] = {
             'range': [x, x+500],
             'scale_ratio':1}
@@ -314,13 +315,16 @@ def update_zoom(zoom_location, img):
         image['layout']['images'][0]['yref'] = 'y'
         image['layout']['images'][0]['x'] = 0
         image['layout']['images'][0]['y'] = 0
+        image['layout']['images'][0]['sizing'] = 'stretch'
+
 
                 # }
                 
 
         return image, 'asdf'
 
-
+    else:
+        pass
 
 
     
