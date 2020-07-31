@@ -55,20 +55,24 @@ app.layout = html.Div(
                     'margin': '10px'},
             multiple = True
         ),
+    dcc.Dropdown(
+        id = 'classifier-selector',
+        options=[
+            {'label': 'Robarts CII', 'value':'robarts_CII'},
+            {'label': 'Robarts LPN', 'value': 'robarts_LPN'},
+            {'label': 'Robarts NIE', 'value': 'robarts_NIE'},
+            {'label': 'Nancy CII', 'value': 'nancy_CII'},
+            {'label': 'Nancy NIE', 'value': 'nancy_NIE'}],
+        style = {
+            'width': '60%'
+            },
+        placeholder = 'Select a classification scheme (default Robarts CII)'
+        ),
 
     dcc.Graph(
         id = 'output-image-upload'
         ),
-    dcc.Dropdown(
-        id = 'classifier-selector',
-        options=[
-            {'label': 'Robarts CII', 'value':'Robarts CII'},
-            {'label': 'Robarts LPN', 'value': 'Robarts LPN'},
-            {'label': 'Robarts NIE', 'value': 'Robarts NIE'},
-            {'label': 'Nancy CII', 'value': 'Nancy CII'},
-            {'label': 'Nancy NIE', 'value': 'Nancy NIE'}],
-        placeholder = 'Select a classification scheme (default Robarts CII)'
-        ),
+    
     dcc.Graph(
         id = 'zoom-window'
         ),
@@ -304,18 +308,20 @@ def update_zoom(zoom_location, img):
             'range': [x, x+500],
             'scale_ratio':1}
         image['layout']['yaxis'] = {
-            'range': [y, y+500],
+            'range': [y-500, y],
             'scale_ratio': 1,
             'autorange': False,
             'constrain': 'domain'
             }
         image['layout']['images'][0]['sizex'] = 3300
-        image['layout']['images'][0]['sizey'] = 5300
+        image['layout']['images'][0]['sizey'] = 5000
         image['layout']['images'][0]['xref'] = 'x'
         image['layout']['images'][0]['yref'] = 'y'
         image['layout']['images'][0]['x'] = 0
         image['layout']['images'][0]['y'] = 0
         image['layout']['images'][0]['sizing'] = 'stretch'
+        image['layout']['width'] = 1000
+        image['layout']['height'] = 1000
 
 
                 # }
@@ -326,7 +332,10 @@ def update_zoom(zoom_location, img):
     else:
         pass
 
-
+# @app.callback(Output('output-image-upload', 'figure'),
+#               [Input('classifier-selector', 'value')])
+# def change_evaluator(x):
+#     pass
     
 
 
