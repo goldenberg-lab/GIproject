@@ -116,6 +116,7 @@ def load_model():
 def take_crops(img):
     n_crops = 50
     image = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2GRAY)
+    image2 = cv2.cvtColor(np.array(img), cv.COLOR_RGB2GRAY)
 
     crop_locations = pd.DataFrame(columns = ['x','y','robarts_CII', 'robarts_LPN','robarts_NIE', 'nancy_CII', 'nancy_AIC'])
 
@@ -130,27 +131,24 @@ def take_crops(img):
         yidx = np.random.choice(np.arange(height - crop_size))
         xidx = np.random.choice(np.arange(width - crop_size))
         crop = image[yidx:(yidx+crop_size+1),xidx:(xidx+crop_size+1)]
-        crop_mean = crop.mean()/255.0
-        if crop_mean <= .95:
+        crop_mean = crop.mean()#/255.0
+        if crop_mean >= 0.00:
             colour_crop = np.array(img)[yidx:(yidx+crop_size+1),xidx:(xidx+crop_size+1)]
             # crop_locations.loc[counter] = [xidx, yidx, crop_mean]
             counter += 1
-            crop_normal = crop/255.0
+            #crop_normal = crop/255.0
             # img_tensor = torch.Tensor(crop_normal.concatenate().transpose([0,3,2,1]))
             img_tensor = torch.Tensor(colour_crop/255.0).unsqueeze(0).transpose(1,3)
-            score = mdl_inf(img_tensor).detach().numpy()
-            crop_locations.loc[counter] = [xidx, yidx] + score.tolist()[0]
+            score = np.repeat(crop_mean,5) # mdl_inf(img_tensor).detach().numpy()
+            crop_locations.loc[counter] = [xidx, yidx] + list(score) #score.tolist()[0]
+            crop_locations.loc[counter] = [xidx, yidx] + list(score) # score.tolist()[0]
         else:
             counter = counter
 
-         
-   
         # crop_locations.loc[counter] = [xidx, yidx]
         # counter += 1
 
-    
-
-    crop_locations.loc[counter+1] = [width, height, -11, 0,0,0,0]
+    crop_locations.loc[counter+1] = [width, height, 0, 0,0,0,0]
 
     return crop_locations
             
@@ -178,7 +176,7 @@ def InteractiveImage(image):
                 'y': [image.size[1] - i for i in crop_locations['y']],
                 'name': 'dummy_trace',
                 'mode': 'markers',
-                'marker' : {'color' : crop_locations['robarts_CII']+11,
+                'marker' : {'color' : crop_locations['robarts_CII'], #+11
                             'opacity': 1,
                             'colorbar': {'thickness':10,
                                          'tickmode': 'array',
@@ -187,6 +185,7 @@ def InteractiveImage(image):
                 }],
         'layout': {
             'autosize': False,
+            'colorscale': 'bluered',
             'margin': go.Margin(l = 40, b= 40, t = 26, r= 10),
             'xaxis': {
                 'range': [0, x_data[1]*scaling_factor],

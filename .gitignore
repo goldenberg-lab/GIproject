@@ -1,2 +1,4 @@
 /saved_networks
 /.idea
+__*
+/models/__*
