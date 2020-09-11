@@ -23,10 +23,12 @@ import json
 import torch
 from models import mdls_torch
 import plotly.express as px
+from results_visualization import results_hists
+from dash.exceptions import PreventUpdate
 dir_base = os.getcwd()
 dir_networks = os.path.join(dir_base,'saved_networks')
 
-
+# df_results = pd.read_csv(os.path.join(dir_base, 'df_ordinal_score.csv'))
 
 
     
@@ -73,15 +75,18 @@ app.layout = html.Div(
     dcc.Graph(
         id = 'output-image-upload'
         ),
-
-        
     dcc.Graph(
         id = 'zoom-window'
+        ),
+    dcc.Graph(
+        id = 'results-histogram'
         ),
     html.Div(
         id = 'test-div'),
     html.Div(
-        id = 'test-div-2')
+        id = 'test-div-2'),
+    html.Div(
+        id = 'test-div-3')
 
     ]
     )
@@ -166,14 +171,16 @@ def take_crops(img):
 
 #######################
 
-def InteractiveImage(image):
+def InteractiveImage(image, crop_locations):
     #set up dummy graph the size of the image
     x_data = np.array([0, image.size[0]])
     y_data = np.array([0, image.size[1]])
     scaling_factor = 1
     
-    crop_locations = take_crops(image)
-    
+    ##################################################
+    # crop_locations = take_crops(image)
+    ##################################################
+
     
     # return dcc.Graph(
     #     id='main-image',
@@ -186,6 +193,8 @@ def InteractiveImage(image):
                 'mode': 'markers',
                 'marker' : {'color' : crop_locations['robarts_CII'],
                             'opacity': 1,
+                            'colorscale': 'Reds',
+                            'size': 7
                             # 'colorbar': {'thickness':10,
                             #               'tickmode': 'array',
                             #               'ticktext': ['low', 'high']}
@@ -213,7 +222,7 @@ def InteractiveImage(image):
                 # 'fixedrange': True
                 
             },
-            #width is scaled to height of 1000, with a 31 pixel buffer for the colorbar
+
             'width': int(1000*x_data[1]/y_data[1]),
             'height': 1000,
             'images': [{
@@ -236,7 +245,7 @@ def InteractiveImage(image):
 
     # return fig
 
-
+    return figure
     return figure, crop_locations.to_json()
     # )
 ###################################
@@ -278,41 +287,91 @@ def crop_image(img):
 
 ###############################################
 
+##################splitting model evaluation from image upload to avoid recalculation
 
-                    
-@app.callback([Output('output-image-upload', 'figure'),
-               Output('memory', 'data')],
-              [Input('upload-image', 'contents'),
-               Input('classifier-selector', 'value')]
+@app.callback(Output('memory', 'data'),
+              [Input('upload-image', 'contents')]
               )
-
-def update_output(contents,classifier):
+def evaluate_image(contents):
     if contents is not None:
-
-        
         datatype, string = contents[0].split(',')
         img = b64_to_pil(string)
         gray_ii = crop_image(img)
+        crop_locations_json = take_crops(Image.fromarray(gray_ii)).to_json()
+        return crop_locations_json
+    else:
+        pass
 
-        figure, df_json = InteractiveImage(Image.fromarray(gray_ii))
+@app.callback(Output('output-image-upload', 'figure'),
+              [Input('upload-image', 'contents'),
+                Input('memory', 'data'),
+                Input('classifier-selector', 'value')]
+              )
+def load_image(image, df_json, classifier):
+    if df_json is None:
+        raise PreventUpdate
+    if image is not None:
+                
+        datatype, string = image[0].split(',')
+        img = b64_to_pil(string)
+        gray_ii = crop_image(img)
         crop_locations = pd.read_json(df_json)
+
+        figure = InteractiveImage(Image.fromarray(gray_ii), crop_locations)
+
         if classifier is None:
             classifier = 'robarts_CII'
         figure['data'][0]['marker']['color'] = crop_locations[classifier]
 
-        return figure, df_json
+
+        return figure
         
     else:
         pass
+
+###################################################
+        
+
+
+
+##############################Original working code, slow                   
+# @app.callback([Output('output-image-upload', 'figure'),
+#                 Output('memory', 'data')],
+#               [Input('upload-image', 'contents'),
+#                 Input('classifier-selector', 'value')]
+#               )
+
+# def update_output(contents,classifier):
+#     if contents is not None:
+
+        
+#         datatype, string = contents[0].split(',')
+#         img = b64_to_pil(string)
+#         gray_ii = crop_image(img)
+
+#         figure, df_json = InteractiveImage(Image.fromarray(gray_ii))
+#         crop_locations = pd.read_json(df_json)
+#         if classifier is None:
+#             classifier = 'robarts_CII'
+#         figure['data'][0]['marker']['color'] = crop_locations[classifier]
+
+
+#         return figure, df_json
+        
+#     else:
+#         pass
+
+#######################################################
 
 @app.callback([Output('zoom-window', 'figure'),
                Output('test-div-2', 'children')],
               [Input('output-image-upload', 'clickData'),
                 Input('output-image-upload', 'figure'),
-                Input('memory', 'data')
+                Input('memory', 'data'),
+                Input('classifier-selector', 'value')
                 ])
 # def update_zoom(zoom_location, image):
-def update_zoom(zoom_location, img, df_json):
+def update_zoom(zoom_location, img, df_json, classifier):
     
     if zoom_location is not None:
         scaling_factor = 1
@@ -348,19 +407,69 @@ def update_zoom(zoom_location, img, df_json):
                 # }
                 
         #second output can be changed to see values in the crop_locations dataframe
-        return image, ' '
+        return image, ''
 
     else:
         pass
+@app.callback([Output('results-histogram', 'figure'),
+               Output('test-div-3', 'children')],
+              [Input('memory', 'data'),
+                Input('classifier-selector', 'value')])
+def hist_graph(df_json, classifier):
+    if df_json is not None:
+        crop_locations = pd.read_json(df_json)
+    else:
+        pass
+    hist_fig = []
+    if classifier is not None:
+        if classifier == 'robarts_CII':
+            hist_fig = results_hists[2]
+            
+        if classifier == 'robarts_NIE':
+            hist_fig = results_hists[4]
+        if classifier == 'robarts_LPN':
+            hist_fig = results_hists[3]
+        if classifier == 'nancy_AIC':
+            hist_fig = results_hists[0]
+        if classifier == 'nancy_CII':
+            hist_fig =  results_hists[1]
+        hist_fig.add_shape(dict(
+            type = 'line',
+            x0 = np.mean(np.mean(crop_locations[classifier])),
+            y0 = 0,
+            x1 = np.mean(np.mean(crop_locations[classifier])),
+            y1 = 20,
+            line = dict(
+                color = 'RoyalBlue',
+                width = 3))
+            
 
-# @app.callback(Output('output-image-upload', 'figure'),
-#               [Input('classifier-selector', 'value')])
-# def change_evaluator(x):
-#     pass
-    
+            )
+
+        hist_fig.add_trace(go.Scatter(x = crop_locations[classifier],
+                                      y = np.zeros(len(crop_locations[classifier])),
+                                      mode = 'markers',
+                                       marker = {
+                                           'color': crop_locations[classifier],
+                                           'size': 5,
+                                           'colorscale': 'Reds',
+                                           'colorbar': {
+                                               'yanchor': 'top',
+                                               'y': 1,
+                                               'x': 0,
+                                               'thickness': 10}}
+                                      )
+                           )
+
+        return hist_fig , np.mean(crop_locations[classifier])
+        
+    else:
+        pass
+
+
 
 
         
     
 if __name__ == '__main__':
-    app.run_server(debug=True)
+    app.run_server(debug=False)
