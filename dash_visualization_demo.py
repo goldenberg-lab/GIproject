@@ -302,7 +302,8 @@ def evaluate_image(contents):
     else:
         pass
 
-@app.callback(Output('output-image-upload', 'figure'),
+@app.callback([Output('output-image-upload', 'figure'),
+               Output('test-div', 'children')],
               [Input('upload-image', 'contents'),
                 Input('memory', 'data'),
                 Input('classifier-selector', 'value')]
@@ -318,13 +319,16 @@ def load_image(image, df_json, classifier):
         crop_locations = pd.read_json(df_json)
 
         figure = InteractiveImage(Image.fromarray(gray_ii), crop_locations)
+        test = 'hasn\'t didn\'t enter the else statement'
 
         if classifier is None:
             classifier = 'robarts_CII'
-        figure['data'][0]['marker']['color'] = crop_locations[classifier]
+        else:
+            figure['data'][0]['marker']['color'] = crop_locations[classifier]
+            test = 'entered the else statement'
 
 
-        return figure
+        return figure, classifier
         
     else:
         pass
@@ -420,7 +424,7 @@ def hist_graph(df_json, classifier):
         crop_locations = pd.read_json(df_json)
     else:
         pass
-    hist_fig = []
+
     if classifier is not None:
         if classifier == 'robarts_CII':
             hist_fig = results_hists[2]
