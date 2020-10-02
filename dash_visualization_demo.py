@@ -12,6 +12,7 @@ import numpy as np
 import dash
 import dash_core_components as dcc
 import dash_html_components as html
+import dash_bootstrap_components as dbc
 from dash.dependencies import Input, Output, State 
 from PIL import Image
 import os
@@ -32,8 +33,9 @@ dir_networks = os.path.join(dir_base,'saved_networks')
 
 
     
-app = dash.Dash()
+external_stylesheets = [dbc.themes.GRID]
 
+app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
 
 app.layout = html.Div(
     [
@@ -71,16 +73,22 @@ app.layout = html.Div(
             },
         placeholder = 'Select a classification scheme (default Robarts CII)'
         ),
-
-    dcc.Graph(
-        id = 'output-image-upload'
-        ),
-    dcc.Graph(
-        id = 'zoom-window'
-        ),
-    dcc.Graph(
-        id = 'results-histogram'
-        ),
+    dbc.Row(
+        [
+        dbc.Col(
+        dcc.Graph(
+            id = 'output-image-upload'
+            ), width = 6),
+        dbc.Col([
+        dcc.Graph(
+            id = 'zoom-window'
+            ),
+        dcc.Graph(
+            id = 'results-histogram'
+            )
+        ],width = 6)
+        ]
+    ),
     html.Div(
         id = 'test-div'),
     html.Div(
