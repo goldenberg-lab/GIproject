@@ -7,19 +7,20 @@ import numpy as np
 import pandas as pd
 import os
 import shutil
-from funs_support import makeifnot
+from funs_support import makeifnot, find_dir_GI
 
 # Assign data directory
-dir_base = os.getcwd()
-dir_data = os.path.join(dir_base, '..', 'data')
+dir_base = find_dir_GI()
+dir_data = os.path.join(dir_base, 'data')
+dir_cropped = os.path.join(dir_data, 'cropped')
 dir_cell = os.path.join(dir_data, 'cell_counter')
-dir_anno = os.path.join(dir_base,'..','cell_counter','points')
-fn_anno = pd.Series(os.listdir(dir_anno))
+dir_anno = os.path.join(dir_cell, 'points')
 
-assert os.path.exists(dir_data)
-print(os.path.exists(dir_cell))
+assert all([os.path.exists(fold) for fold in [dir_data, dir_cropped]])
+
 makeifnot(dir_cell)
-
+makeifnot(dir_anno)
+fn_anno = pd.Series(os.listdir(dir_anno))
 
 #################################################################
 # -------------------------- JAZZ 36 -------------------------- #
@@ -104,18 +105,22 @@ df_code = pd.read_csv(os.path.join(dir_data, 'df_codebreaker.csv'))
 #         holder.append(tmp)
 # df_sub = pd.concat(holder).reset_index(drop=True)
 
-demo = pd.read_csv(os.path.join(dir_data, 'df_lbls_nancy.csv')).drop(columns=['CII','AIC','ULC'])
+demo = pd.read_csv(os.path.join(dir_data, 'df_lbls_nancy.csv')).drop(columns=['CII', 'AIC', 'ULC'])
 nancy = pd.read_excel(os.path.join(dir_data, 'nancy_score_histo.xlsx'))
-nancy = nancy.drop(columns=['ID code','PATH ID.1']).rename(columns={'PATH ID':'ID'}).melt('ID',None,'tissue','score')
-nancy['score'] = nancy.score.astype(str).str.replace('\\.[0-9]','').str.replace('[^0-9]','')
-nancy['score'] = np.where(nancy.score.str.len()==0,np.NaN, nancy.score).astype(float)
-nancy = nancy[nancy.score.notnull()].assign(score = lambda x: x.score.astype(int)).reset_index(None, True)
-demo = demo.merge(nancy,'left',['ID','tissue'])
-print(demo.groupby(['score_x','score_y']).size().reset_index())
-demo = demo.drop(columns=['score_x']).rename(columns={'score_y':'score'})
+nancy = nancy.drop(columns=['ID code', 'PATH ID.1']).rename(columns={'PATH ID': 'ID'}).melt('ID', None, 'tissue',
+                                                                                            'score')
+nancy['score'] = nancy.score.astype(str).str.replace('\\.[0-9]', '').str.replace('[^0-9]', '')
+nancy['score'] = np.where(nancy.score.str.len() == 0, np.NaN, nancy.score).astype(float)
+nancy = nancy[nancy.score.notnull()].assign(score=lambda x: x.score.astype(int)).reset_index(None, True)
+demo = demo.merge(nancy, 'left', ['ID', 'tissue'])
+print(demo.groupby(['score_x', 'score_y']).size().reset_index())
+demo = demo.drop(columns=['score_x']).rename(columns={'score_y': 'score'})
 # df_sub = demo[demo.score >= 2].reset_index()
 # print(df_sub.score.value_counts())
 df_sub = demo.copy()
+
+new_IDs = np.setdiff1d(df_code.ID.unique(), demo.ID.unique())
+
 
 # # Inflammation
 # dat_inf = df_sub.melt('file', ['CII', 'LPN', 'NIE', 'EOU']).groupby(['variable', 'value']).size().reset_index().rename(
@@ -132,32 +137,36 @@ np.round((df_sub.age_lab / 365).describe()).astype(int)
 
 # old_images = ['49TJHRED_Descending', '49TJHRED_Rectum', '6EAWUIY4_Cecum', '6EAWUIY4_Rectum', '8HDFP8K2_Transverse', '8ZYY45X6_Ascending', '8ZYY45X6_Descending', '8ZYY45X6_Sigmoid', '9U0ZXCBZ_Cecum', 'BCN3OLB3_Descending', 'BCN3OLB3_Transverse', 'BLROH2RX_Ascending', 'BLROH2RX_Cecum', 'E9T0C977_Sigmoid', 'ESZOXUA8_Ascending', 'J6QR55KL_Descending', 'J6QR55KL_Rectum', 'J6QR55KL_Sigmoid', 'J6QR55KL_Transverse', 'LALQDCTM_Descending', 'LALQDCTM_Rectum', 'LALQDCTM_Sigmoid', 'MARQQRM5_Rectum', 'MARQQRM5_Transverse', 'MM6IXZVW_Cecum', 'MM6IXZVW_Rectum', 'MM6IXZVW_Transverse', 'N6MF55ZU_Rectum', 'PZUZFPUN_Rectum', 'QF0TMM7V_Rectum', 'QF0TMM7V_Sigmoid', 'QIGW0TSV_Transverse', 'R9I7FYRB_Transverse', 'RADS40DE_Ascending', 'RADS40DE_Rectum', 'SQ8ICUXK_Transverse', 'TMYPX044_Transverse', 'TRS8XIRT_Cecum', 'Y4UFTIIO_Ascending', 'Y4UFTIIO_Cecum', 'Y7CXU9SM_Rectum', 'Y7CXU9SM_Transverse']
 # old_images = pd.Series(old_images).str.split('_',expand=True).rename(columns={0:'qid', 1:'tissue'})
-old_images = fn_anno.str.replace('cleaned_','').str.split('\\_|\\.',3,True).drop(columns=3)
-old_images.columns = ['qid','tissue','crop']
+# old_images = fn_anno.str.replace('cleaned_', '').str.split('\\_|\\.', 3, True).drop(columns=3)
+# old_images.columns = ['qid', 'tissue', 'crop']
+#
+# [os.remove(os.path.join(dir_cell, ff)) for ff in os.listdir(dir_cell)]
 
-[os.remove(os.path.join(dir_cell, ff)) for ff in os.listdir(dir_cell)]
+# Merge on the new patients
+cn_loop = ['ID','QID','tissue','type','file']
+both_IDs = list(df_sub.ID.unique()) + list(new_IDs)
+df_loop = df_code.query('ID.isin(@both_IDs)')[cn_loop]
+# Get the existing files
+fn_old = pd.Series(os.listdir(dir_cell))
+fn_old = fn_old[fn_old.str.contains('cleaned')].reset_index(None, True)
+fn_old = fn_old.str.split('\\_',3,True).rename(columns={1:'QID',2:'tissue'}).drop(columns=[0,3]).assign(file=fn_old)
+fn_new = fn_old.merge(df_loop,'outer',['QID','tissue'])
+fn_new = fn_new[fn_new.file_x.isnull()].drop(columns=['file_x']).rename(columns={'file_y':'file'})
+
 # Loop through each patient and find a random crop associated with them
 np.random.seed(1234)
-for ii, rr in df_sub.iterrows():
-    file = rr['file']
-    tissue = rr['tissue']
-    id = rr['ID']
-    tt = np.where(id.split('-')[0] == 'S18', ['test'], ['train'])[0]
-    qid = df_code[df_code.ID == id].QID.unique()[0]
-    idx_old = (old_images.qid == qid) & (old_images.tissue == tissue)
-    if idx_old.any():
-        print('Skipping image, ID-tissue from old batch')
-        continue
-    else:
-        print('New image, will sample')
-    path = os.path.join(dir_data, 'cropped', tt, qid, tissue)
-    crop = np.random.choice(os.listdir(path), 1)[0]
-    shutil.copyfile(os.path.join(path, crop), os.path.join(dir_cell, crop))
-    # assert len(os.listdir(dir_cell)) == (ii + 1)
+for ii, rr in fn_new.iterrows():
+    file, tissue, id, qid, tt = rr['file'], rr['tissue'], rr['ID'], rr['QID'], rr['type']
+    print('tt: %s, qid: %s' % (tt, qid))
+    path1 = os.path.join(dir_cropped, tt, qid)
+    fn1 = pd.Series(os.listdir(path1))
+    tissue = list(fn1[fn1.str.contains(tissue)])[0]
+    path2 = os.path.join(path1, tissue)
+    assert os.path.exists(path2)
+    crop = np.random.choice(os.listdir(path2), 1)[0]
+    shutil.copyfile(os.path.join(path2, crop), os.path.join(dir_cell, crop))
 
-# Do a quick sanity check
-fn1 = pd.Series(os.listdir(dir_cell))
-fn2 = fn_anno.str.replace('-points.zip','')
-assert len(np.intersect1d(fn1, fn2)) == 0
-
-
+# # Do a quick sanity check
+# fn1 = pd.Series(os.listdir(dir_cell))
+# fn2 = fn_anno.str.replace('-points.zip', '')
+# assert len(np.intersect1d(fn1, fn2)) == 0
