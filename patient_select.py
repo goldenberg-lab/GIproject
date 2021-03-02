@@ -121,7 +121,6 @@ df_sub = demo.copy()
 
 new_IDs = np.setdiff1d(df_code.ID.unique(), demo.ID.unique())
 
-
 # # Inflammation
 # dat_inf = df_sub.melt('file', ['CII', 'LPN', 'NIE', 'EOU']).groupby(['variable', 'value']).size().reset_index().rename(
 #     columns={0: 'n', 'value': 'lbl'})
@@ -142,18 +141,26 @@ np.round((df_sub.age_lab / 365).describe()).astype(int)
 #
 # [os.remove(os.path.join(dir_cell, ff)) for ff in os.listdir(dir_cell)]
 
+# Load the cropping manifest
+dat_idx_crops = pd.read_csv(os.path.join(dir_data, 'dat_idx_crops.csv'))
+dat_idx_crops.rename(columns = {'sample':'crop'}, inplace=True)
+
 # Merge on the new patients
-cn_loop = ['ID','QID','tissue','type','file']
+cn_loop = ['ID', 'QID', 'tissue', 'type', 'file']
 both_IDs = list(df_sub.ID.unique()) + list(new_IDs)
 df_loop = df_code.query('ID.isin(@both_IDs)')[cn_loop]
 # Get the existing files
 fn_old = pd.Series(os.listdir(dir_cell))
 fn_old = fn_old[fn_old.str.contains('cleaned')].reset_index(None, True)
-fn_old = fn_old.str.split('\\_',3,True).rename(columns={1:'QID',2:'tissue'}).drop(columns=[0,3]).assign(file=fn_old)
-fn_new = fn_old.merge(df_loop,'outer',['QID','tissue'])
-fn_new = fn_new[fn_new.file_x.isnull()].drop(columns=['file_x']).rename(columns={'file_y':'file'})
+fn_old = fn_old.str.split('\\_', 3, True).rename(columns={1: 'QID', 2: 'tissue'}).drop(columns=[0, 3]).assign(
+    file=fn_old)
+fn_new = fn_old.merge(df_loop, 'outer', ['QID', 'tissue'])
+fn_new = fn_new[fn_new.file_x.isnull()].drop(columns=['file_x']).rename(columns={'file_y': 'file'})
 
 # Loop through each patient and find a random crop associated with them
+px, nc = 501, 4
+cn_idx = ['yidx','xidx']
+cn_d = ['dyidx','dxidx']
 np.random.seed(1234)
 for ii, rr in fn_new.iterrows():
     file, tissue, id, qid, tt = rr['file'], rr['tissue'], rr['ID'], rr['QID'], rr['type']
@@ -163,8 +170,18 @@ for ii, rr in fn_new.iterrows():
     tissue = list(fn1[fn1.str.contains(tissue)])[0]
     path2 = os.path.join(path1, tissue)
     assert os.path.exists(path2)
-    crop = np.random.choice(os.listdir(path2), 1)[0]
-    shutil.copyfile(os.path.join(path2, crop), os.path.join(dir_cell, crop))
+    fn_path2 = pd.Series(os.listdir(path2))
+    # crop = np.random.choice(fn_path2, len(fn_path2), replace=False)
+    # Find the first nc crops that are far apart
+    tmp_idx = dat_idx_crops.query('idt == @id').reset_index(None, True)
+    tmp_idx = tmp_idx.sort_values(cn_idx).reset_index(None, True)
+    q = max(tmp_idx.index // nc)
+    yidx = np.where(tmp_idx.index % q == q-1)[0]
+    tmp_idx = tmp_idx.iloc[yidx].reset_index(None, True)
+    for k in tmp_idx.crop.values:
+        pat_k = '_'+str(k)+'.png'
+        crop = fn_path2[fn_path2.str.contains(pat_k)].to_list()[0]
+        shutil.copyfile(os.path.join(path2, crop), os.path.join(dir_cell, crop))
 
 # # Do a quick sanity check
 # fn1 = pd.Series(os.listdir(dir_cell))
