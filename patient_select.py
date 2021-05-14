@@ -141,6 +141,10 @@ np.round((df_sub.age_lab / 365).describe()).astype(int)
 #
 # [os.remove(os.path.join(dir_cell, ff)) for ff in os.listdir(dir_cell)]
 
+################################################################
+# -------------------------- NEW 45 -------------------------- #
+################################################################
+
 # Load the cropping manifest
 dat_idx_crops = pd.read_csv(os.path.join(dir_data, 'dat_idx_crops.csv'))
 dat_idx_crops.rename(columns = {'sample':'crop'}, inplace=True)
@@ -156,12 +160,14 @@ fn_old = fn_old.str.split('\\_', 3, True).rename(columns={1: 'QID', 2: 'tissue'}
     file=fn_old)
 fn_new = fn_old.merge(df_loop, 'outer', ['QID', 'tissue'])
 fn_new = fn_new[fn_new.file_x.isnull()].drop(columns=['file_x']).rename(columns={'file_y': 'file'})
+# ten_left = ['8ZW8OFIX', 'NHCW2RCU', 'QQD75QQ2', 'SFXNO05V', 'TI5NJJNF',
+#             'V4O79R44', 'VCFMX93Q', 'VCUKIVCT', 'VUJ41KD4', 'W04THLV0']
+# fn_new = fn_new.query('QID.isin(@ten_left)')
 
 # Loop through each patient and find a random crop associated with them
 px, nc = 501, 4
 cn_idx = ['yidx','xidx']
 cn_d = ['dyidx','dxidx']
-np.random.seed(1234)
 for ii, rr in fn_new.iterrows():
     file, tissue, id, qid, tt = rr['file'], rr['tissue'], rr['ID'], rr['QID'], rr['type']
     print('tt: %s, qid: %s' % (tt, qid))
@@ -171,7 +177,6 @@ for ii, rr in fn_new.iterrows():
     path2 = os.path.join(path1, tissue)
     assert os.path.exists(path2)
     fn_path2 = pd.Series(os.listdir(path2))
-    # crop = np.random.choice(fn_path2, len(fn_path2), replace=False)
     # Find the first nc crops that are far apart
     tmp_idx = dat_idx_crops.query('idt == @id').reset_index(None, True)
     tmp_idx = tmp_idx.sort_values(cn_idx).reset_index(None, True)
@@ -187,3 +192,31 @@ for ii, rr in fn_new.iterrows():
 # fn1 = pd.Series(os.listdir(dir_cell))
 # fn2 = fn_anno.str.replace('-points.zip', '')
 # assert len(np.intersect1d(fn1, fn2)) == 0
+
+
+#############################################################
+# -------------------------- OLD -------------------------- #
+#############################################################
+
+four_left = ['02FQJM8D', 'BLROH2RX', 'FRQILPUQ', 'QGROELGX']
+dat_old = fn_old.query('QID.isin(@four_left) & tissue=="Rectum"')
+dat_old = dat_old.drop(columns='file').drop_duplicates()
+dat_old = dat_old.merge(df_loop.drop(columns='file'),'left')
+
+for ii, rr in dat_old.iterrows():
+    id, qid, tt = rr['ID'], rr['QID'], rr['type']
+    print('tt: %s, qid: %s' % (tt, qid))
+    path1 = os.path.join(dir_cropped, tt, qid, 'Rectum')
+    assert os.path.exists(path1)
+    fn_path1 = pd.Series(os.listdir(path1))
+    crop1 = fn_path1.str.replace('.png','').str.split('_',3,True)[3].astype(int)
+    tmp_idx = dat_idx_crops.query('idt==@id & tissue=="Rectum"').merge(pd.DataFrame({'crop':crop1,'fn':fn_path1}))
+    tmp_idx = tmp_idx.sort_values(cn_idx).reset_index(None, True)
+    q = max(tmp_idx.index // nc)
+    yidx = np.where(tmp_idx.index % q == q-1)[0]
+    tmp_idx = tmp_idx.iloc[yidx].reset_index(None, True)
+    for jj, cc in tmp_idx.iterrows():
+        fn = cc['fn']
+        path_from = os.path.join(path1, fn)
+        path_to = os.path.join(dir_cell, fn)
+        shutil.copy(path_from, path_to)
