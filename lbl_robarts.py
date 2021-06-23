@@ -8,10 +8,11 @@ import pandas as pd
 import datetime as dt
 import os
 import sys
+from funs_support import find_dir_GI
 
 # Assign data directory
-dir_base = os.getcwd()
-dir_data = os.path.join(dir_base,'..','data')
+dir_base = find_dir_GI()
+dir_data = os.path.join(dir_base, 'data')
 dir_images = os.path.join(dir_data, 'cleaned')
 
 # Define the file names

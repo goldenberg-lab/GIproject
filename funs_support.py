@@ -12,16 +12,17 @@ def find_dir_GI():
 	# Set directory based on CPU name
 	if cpu == 'RT5362WL-GGB':
 		print('On predator machine')
-		dir_GI = 'D:\\projects\\GIOrdinal'
 		if os.name == 'nt':
 			print('Using windows')
+			dir_GI = 'D:\\projects\\GIOrdinal'
 		elif os.name=='posix':
 			print('Using WSL')
+			dir_GI = '/mnt/d/projects/GIOrdinal'
 		else:
 			print('Not sure which operating system?!')
 	elif cpu == 'snowqueen':
 		print('On snowqueen machine')
-		dir_GI = os.path.join(dir_base, '..')
+		dir_GI = '/data/GIOrdinal'
 	else:
 		sys.exit('Where are we?!')
 	return dir_GI
