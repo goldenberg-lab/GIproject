@@ -13,15 +13,11 @@ echo "-------------- SCRIPT TO EXECUTE GI PIPELINE -----------------"
 dir=$(pwd)
 echo "Current directory (should be codes folder):   "$dir
 
-# activate project conda
-echo "activating GIProject conda environment"
-conda activate GIProject
-
 ##########################
 # ---- GI HISTOLOGY ---- #
 
 echo "STEP 1: PROCESS THE IMAGE FILES"
-python image_clean_and_crop.py
+python clean_crop.py
 # output:   (i) Full cleaned images: ~/data/cleaned/{ID}/{file}.png
 #           (ii) Cropped images: ~/data/cropped/{train,test}/{ID}/{tissue}/{file}.png
 #           (iii) Crop location ~/data/dat_idx_crops.csv

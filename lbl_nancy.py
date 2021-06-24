@@ -1,25 +1,21 @@
 # Load in all necessary modules
 import numpy as np
 import pandas as pd
-import datetime as dt
 import os
-import sys
+from funs_support import find_dir_GI, stopifnot
+import seaborn as sns
+from matplotlib import pyplot as plt
 
 # Assign data directory
-dir_base = os.getcwd()
-dir_data = os.path.join(dir_base,'..','data')
-dir_images = os.path.join(dir_data, 'cleaned')
+dir_base = find_dir_GI()
+dir_data = os.path.join(dir_base, 'data')
+dir_output = os.path.join(dir_base, 'output')
 
 # Define the file names
-fn_robarts = os.path.join(dir_data,'df_lbls_robarts.csv')
-fn_nancy = os.path.join(dir_data,'nancy_score_histo.xlsx')
+path_robarts = os.path.join(dir_data,'df_lbls_robarts.csv')
+path_nancy = os.path.join(dir_data,'nancy_score_histo.xlsx')
 
-def stopifnot(arg, msg):
-    import sys
-    if not arg:
-        sys.exit(msg)
-
-stopifnot(all([os.path.exists(x) for x in  [dir_data, dir_images, fn_nancy,fn_robarts]]),'Error! path not found!')
+stopifnot(all([os.path.exists(x) for x in  [dir_data, path_nancy, path_robarts]]),'Error! path not found!')
 
 ########################################
 # ----- STEP 1: LOAD IN THE DATA ----- #
@@ -30,9 +26,9 @@ stopifnot(all([os.path.exists(x) for x in  [dir_data, dir_images, fn_nancy,fn_ro
 # img.set_title('Raw images size distribution (in pixels)')
 # img.figure.savefig(os.path.join(dir_output,'fig_sizes.png'))
 
-df_robarts = pd.read_csv(fn_robarts)
-df_nancy = pd.read_excel(fn_nancy).drop(columns=['ID code','PATH ID.1']).rename(columns={'PATH ID':'ID'})
-
+df_robarts = pd.read_csv(path_robarts)
+df_nancy = pd.read_excel(path_nancy).drop(columns=['ID code','PATH ID.1'])
+df_nancy.rename(columns={'PATH ID':'ID'},inplace=True)
 df_long = df_nancy.melt(id_vars='ID',var_name='tissue',value_name='score')
 # Add three columns
 cn_lbls= ['CII','AIC','ULC']
@@ -67,18 +63,12 @@ df_merge.to_csv(os.path.join(dir_data,'df_lbls_nancy.csv'),index=False)
 # ----- STEP 2: PRINT OFF SOME BASIC SUMMARY STATS ----- #
 ##########################################################
 
-dir_output = os.path.join(dir_base,'..','output')
-if not os.path.exists(dir_output):
-    print('Output folder does not exist, creating!'); os.mkdir(dir_output)
-
-import seaborn as sns
-from matplotlib import pyplot as plt
-
 # Correlation between scores
 ax = sns.heatmap(df_merge[cn_lbls].corr())
 ax.set_ylim(4, 0)
 ax.set_title('Correlation by score',size=18)
 ax.figure.savefig(fname=os.path.join(dir_output,'nancy_corr_lbl.png'))
+plt.close()
 
 # Correlation between labels
 tmp_df = df_merge.melt(id_vars=['ID','tissue'],value_vars=cn_lbls,var_name='scores')
@@ -89,6 +79,7 @@ plt.figure(figsize=(10,8))
 ax = sns.heatmap(tmp_df,square=True); ax.set_ylim(6, 0)
 ax.set_title('Correlation by tissue',size=18)
 ax.figure.savefig(fname=os.path.join(dir_output,'nancy_corr_tissue.png'))
+plt.close()
 
 # Tabular frequency of scores
 df_merge.insert(0,'type',np.where(df_merge.ID.str.contains('S18'),'test','train'))
@@ -113,5 +104,5 @@ g = sns.catplot(x='bool',y='share',row='score',kind='bar',data=df_tab_agg)
 g.set_xlabels(''); g.set_ylabels('Share (%)')
 #g.set_titles('Frequency of Yes/No scores for Nancy',size=14)
 g.savefig(os.path.join(dir_output,'dist_nancy_lbls.png'))
-
+plt.close()
 

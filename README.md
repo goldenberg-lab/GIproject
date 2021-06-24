@@ -5,7 +5,7 @@ Folder contains codes necessary to reproduce GI results. Assumed folder structur
 ```bash
 | base
 |-- codes
-| | -- GIPipeline.sh
+| | -- pipeline_GI.sh
 | | -- (python scripts)
 |-- data
 | | -- images

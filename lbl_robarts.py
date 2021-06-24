@@ -8,22 +8,23 @@ import pandas as pd
 import datetime as dt
 import os
 import sys
-from funs_support import find_dir_GI
+import seaborn as sns
+from matplotlib import pyplot as plt
+
+from funs_support import find_dir_GI, makeifnot, no_diff, stopifnot
 
 # Assign data directory
 dir_base = find_dir_GI()
 dir_data = os.path.join(dir_base, 'data')
+dir_20x = os.path.join(dir_data, '20X')
 dir_images = os.path.join(dir_data, 'cleaned')
+dir_output = os.path.join(dir_base, 'output')
+makeifnot(dir_output)
 
 # Define the file names
 fn_clin = os.path.join(dir_data,'annot_histo_stratifier.csv')
 fn_code = os.path.join(dir_data,'code_breaker_histo.csv')
 fn_robarts = os.path.join(dir_data,'robarts_score_histo.xlsx')
-
-def stopifnot(arg, msg):
-    import sys
-    if not arg:
-        sys.exit(msg)
 
 for ff in [dir_data, dir_images, fn_clin, fn_code, fn_robarts]:
     stopifnot(os.path.exists(ff),'Error! ' + ff + ' path not found!')
@@ -32,23 +33,35 @@ for ff in [dir_data, dir_images, fn_clin, fn_code, fn_robarts]:
 # ----- STEP 1: LOAD IN THE DATA ----- #
 ########################################
 
+# New patients (won't have demographic data)
+fn_20x = pd.Series(os.listdir(dir_20x))
+idt_20x = fn_20x.str.split('\\s',1,True).iloc[:,0]
+
+# Different tissue types
+tissues = ['Cecum', 'Ascending', 'Transverse', 'Descending', 'Sigmoid', 'Rectum']
+
 # --- (1) Get a list of IDs/Scans from the image folder --- #
 df_scans = pd.DataFrame([])
 for ff in os.listdir(dir_images):
     df_scans = pd.concat([df_scans,pd.DataFrame({'ID':ff,'tissue':os.listdir(os.path.join(dir_images,ff))})])
 df_scans.reset_index(drop=True,inplace=True)
 df_scans['file'] = df_scans.tissue.copy()
-df_scans['tissue'] = df_scans.tissue.str.replace('cleaned|.png|_|'+'|'.join(df_scans.ID.unique()),'')
-# Re-code Cecum-001 and SplenicFlexure to Cecum and Descending, respectively
-df_scans.tissue = df_scans.tissue.str.split('\\-',expand=True,n=1).iloc[:,0].str.strip()
-df_scans.tissue = df_scans.tissue.str.replace('SplenicFlexure','Descending')
+# Replace Splenic_Flexure with Descending
+df_scans['tissue'] = df_scans.tissue.str.replace('Splenic_Flexure','Descending')
+df_scans['tissue'] = df_scans.tissue.str.split('\\_',2,True).iloc[:,2]
+# Remove .png or -001
+df_scans['tissue'] = df_scans.tissue.str.split('\\.|\\-',1,True)[0]
 df_scans_long = df_scans.groupby(['ID','tissue']).size().reset_index().rename(columns={0:'n'})
-df_scans_long = df_scans_long.pivot(index='ID',columns='tissue',values='n').reset_index().melt(id_vars='ID')
-df_scans_long['value'] = np.array([np.where(np.isnan(x),0,x) for x in df_scans_long.value]).astype(int)
-df_scans_wide = df_scans_long.pivot(index='ID',columns='tissue',values='value').reset_index()
-
-# Different tissue types
-tissues = ['Cecum', 'Ascending', 'Transverse', 'Descending', 'Sigmoid', 'Rectum']
+df_scans_long = df_scans_long.pivot(index='ID',columns='tissue',values='n').reset_index()
+df_scans_long = df_scans_long.melt('ID',None,None,'n').assign(n=lambda x: x.n.fillna(0).astype(int))
+df_scans_wide = df_scans_long.pivot(index='ID',columns='tissue',values='n').reset_index()
+# Patients which we have an entire .svs for
+idt_scans = pd.Series(df_scans.ID.unique())
+idt_scans_orig = pd.Series(np.setdiff1d(idt_scans, idt_20x))
+print('We have %i patients with a .svs file, and %i original' % (len(idt_scans), len(idt_scans_orig)))
+df_scans_long_orig = df_scans_long.query('ID.isin(@idt_scans_orig)',engine='python').reset_index(None, True)
+df_scans_orig = df_scans.query('ID.isin(@idt_scans_orig)',engine='python').reset_index(None, True)
+df_scans_wide_orig = df_scans_wide.query('ID.isin(@idt_scans_orig)',engine='python').reset_index(None, True)
 
 # --- (2) Load in the clinical data --- #
 
@@ -75,22 +88,23 @@ df_clin['age_diag'] = (df_clin.ibd_dx_dt - df_clin.dob).dt.days.values
 df_clin['age_lab'] = (df_clin.lab_dt - df_clin.dob).dt.days.values
 # Patients that have a lab date before or around their diagnosis date are new patients
 df_clin['patient'] = np.where(df_clin.age_lab - df_clin.age_diag <= 30,'new','existing')
+assert ~df_clin.ID.duplicated().any()
+idt_demo = df_clin.ID.copy()
 # Subset the clinical data to line up with the data we actually have scans for
-stopifnot(len(np.setdiff1d(df_scans.ID.unique(),df_clin.ID))==0,
-          'Error! IDs from image scan do not align with manifest')
-df_clin = df_clin[df_clin.ID.isin(df_scans.ID.unique())].reset_index(drop=True)
+assert len(np.setdiff1d(idt_scans_orig,idt_demo))==0
+df_clin = df_clin[df_clin.ID.isin(idt_scans_orig)].reset_index(drop=True)
 
 # --- (3) Load in the code breaker tabulations --- #
 df_code = pd.read_csv(fn_code).rename(columns={'ID code':'breaker','PATH ID':'ID'})
 df_code.rename(columns=dict(zip(df_code.columns[2:],df_code.columns[2:].str.capitalize())),inplace=True)
 df_code.columns = df_code.columns.str.strip()
-
+assert no_diff(idt_scans_orig, df_code.ID)
 # Check that the code-breaker tabulation lines up
 df_code_long = df_code.melt(id_vars=['breaker','ID'],var_name='tissue',value_name='n')
-df_scans_long = df_scans_wide.melt(id_vars='ID',var_name='tissue',value_name='n')
-tmp_check = df_code_long.merge(df_scans_long,how='outer',on=['ID','tissue'])
-stopifnot((tmp_check.shape[0] == df_code_long.shape[0]) & (np.mean(tmp_check.n_x == tmp_check.n_y)==1),
-          'Error! Code breaker does not line up with scans!')
+tmp_check = df_code_long.merge(df_scans_long_orig,how='outer',on=['ID','tissue'])
+cond1 = tmp_check.shape[0] == df_scans_long_orig.shape[0]
+cond2 =  np.all(tmp_check.n_x == tmp_check.n_y)
+assert cond1 and cond2
 
 # ---- (4) Load in the Robarts histological scores --- #
 df_robarts = pd.read_excel(fn_robarts).rename(columns={'Code':'breaker'})
@@ -124,7 +138,7 @@ df_lbls = df_code[['breaker','ID']].merge(df_holder,how='right',on='breaker').dr
 df_lbls = df_lbls.melt(id_vars=['ID','lbl'],var_name='tissue')
 df_lbls = df_lbls.pivot_table(index=['ID','tissue'],columns='lbl',aggfunc=lambda x: x).reset_index()
 df_lbls.columns = ['ID','tissue'] + [x[1] for x in df_lbls.columns][2:]
-df_lbls = df_scans.merge(df_lbls,how='left',on=['ID','tissue'])
+df_lbls = df_scans_orig.merge(df_lbls,how='left',on=['ID','tissue'])
 
 # Add on the patient meta-data
 df_lbls = df_clin[['ID','lab_dt','sex','age_lab']].merge(df_lbls,how='right',on='ID')
@@ -135,13 +149,6 @@ df_lbls.to_csv(os.path.join(dir_data,'df_lbls_robarts.csv'),index=False)
 ##########################################################
 # ----- STEP 2: PRINT OFF SOME BASIC SUMMARY STATS ----- #
 ##########################################################
-
-dir_output = os.path.join(dir_base,'..','output')
-if not os.path.exists(dir_output):
-    print('Output folder does not exist, creating!'); os.mkdir(dir_output)
-
-import seaborn as sns
-from matplotlib import pyplot as plt
 
 # Sex distribution
 print('Sex table')
@@ -156,12 +163,15 @@ tmp_df = df_clin[['ID','age_diag','age_lab']].melt(id_vars='ID')
 tmp_df.value = tmp_df.value / 365.25
 g = sns.FacetGrid(tmp_df,row='variable',margin_titles=True)
 g.map(plt.hist, 'value', color='blue', bins=np.arange(0,18,1))
+g.savefig(os.path.join(dir_output,'age_dist.png'))
+plt.close()
 
 # Correlation between scores
 ax = sns.heatmap(df_lbls[cn_lbls].corr())
 ax.set_ylim(4, 0)
 ax.set_title('Correlation by score',size=18)
 ax.figure.savefig(fname=os.path.join(dir_output,'corr_score.png'))
+plt.close()
 
 # Correlation between tissues
 tmp_df = df_lbls.melt(id_vars=['ID','tissue'],value_vars=cn_lbls,var_name='scores')
@@ -172,6 +182,7 @@ plt.figure(figsize=(10,8))
 ax = sns.heatmap(tmp_df,square=True); ax.set_ylim(6, 0)
 ax.set_title('Correlation by tissue',size=18)
 ax.figure.savefig(fname=os.path.join(dir_output,'corr_tissue.png'))
+plt.close()
 
 # Tabular frequency of scores
 df_tab = df_lbls.melt(id_vars='ID',value_vars=cn_lbls,var_name='score').groupby(['score','value']).size().reset_index()
@@ -185,9 +196,5 @@ df_tab['share'] = df_tab.n / df_tab.tot
 ax = sns.barplot(x='score',y='share',hue='ordinal',data=df_tab)
 ax.set_xlabel('Score type'); ax.set_ylabel('Percent of labels')
 ax.figure.savefig(fname=os.path.join(dir_output,'dist_lbls.png'))
-
-
-
-
 
 

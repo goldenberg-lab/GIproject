@@ -5,6 +5,18 @@ SUPPORT FUNCTIONS
 import os
 import socket
 import sys
+import numpy as np
+
+def stopifnot(arg, msg):
+    if not arg:
+        sys.exit(msg)
+
+def no_diff(x, y):
+	uu = np.union1d(x, y)
+	ii = np.intersect1d(x, y)
+	check = len(np.setdiff1d(uu, ii)) == 0
+	return check
+
 
 def find_dir_GI():
 	dir_base = os.getcwd()
@@ -35,3 +47,9 @@ def makeifnot(path):
 	else:
 		print('Folder already exists')
 
+def random_crop(img, height, width, crop_size, ss):
+    np.random.seed(ss)
+    yidx = np.random.choice(np.arange(height - crop_size))
+    xidx = np.random.choice(np.arange(width - crop_size))
+    cropped = img[yidx:(yidx + crop_size + 1), xidx:(xidx + crop_size) + 1].copy()
+    return cropped, yidx, xidx

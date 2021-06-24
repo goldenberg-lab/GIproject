@@ -11,11 +11,7 @@ import torch
 import torch.nn as nn
 from skimage import io
 from datetime import datetime as dt
-
-def stopifnot(arg, msg):
-    import sys
-    if not arg:
-        sys.exit(msg)
+from funs_support import stopifnot
 
 ########################################
 # ----- STEP 1: LOAD IN THE DATA ----- #

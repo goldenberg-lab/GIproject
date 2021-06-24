@@ -3,12 +3,7 @@ import shutil
 import numpy as np
 import pandas as pd
 import string
-
 from funs_support import find_dir_GI, makeifnot
-
-########################################
-# ----- STEP 1: LOAD IN THE DATA ----- #
-########################################
 
 # directories
 dir_base = find_dir_GI()
@@ -16,6 +11,14 @@ dir_data = os.path.join(dir_base, 'data')
 dir_cleaned = os.path.join(dir_data, 'cleaned')
 dir_cropped = os.path.join(dir_data, 'cropped')
 assert all([os.path.exists(fold) for fold in [dir_data, dir_cropped, dir_cleaned]])
+dir_train = os.path.join(dir_cropped, 'train')
+makeifnot(dir_train)
+dir_test = os.path.join(dir_cropped, 'test')
+makeifnot(dir_test)
+
+########################################
+# ----- STEP 1: LOAD IN THE DATA ----- #
+########################################
 
 # data
 df_robarts = pd.read_csv(os.path.join(dir_data, 'df_lbls_robarts.csv'))
@@ -52,7 +55,6 @@ df_anon = df_merge[['type', 'QID', 'file2'] + list(df_merge.columns[df_merge.col
 df_anon.rename(columns={'QID': 'ID', 'file2': 'file'}, inplace=True)
 df_anon.to_csv(os.path.join(dir_data, 'df_lbls_anon.csv'), index=False)
 print(df_merge.type.value_counts())
-print(df_merge.query('ID == "S16-1847"').QID.unique()[0])
 
 # Repeat for the new patients within Nancy/Robarts score
 fn_cropped = pd.Series(os.listdir(dir_cropped))
@@ -82,12 +84,10 @@ df_codebreaker.to_csv(os.path.join(dir_data, 'df_codebreaker.csv'), index=False)
 # ----- STEP 3: ANONYMIZE FOLDERS ----- #
 #########################################
 
-dir_train = os.path.join(dir_cropped, 'train')
-makeifnot(dir_train)
-dir_test = os.path.join(dir_cropped, 'test')
-makeifnot(dir_test)
+from distutils.dir_util import copy_tree
 
 di_ID_both = {**di_ID, **di_ID_new}
+di_ID_both_rev = {v:k for k,v in di_ID_both.items()}
 
 for ii, rr in df_merge.iterrows():
     fold1 = rr['ID']
@@ -97,13 +97,20 @@ for ii, rr in df_merge.iterrows():
     val = rr['type']
     path1 = os.path.join(dir_cropped, fold1)
     path2 = os.path.join(dir_cropped, val, fold2)
-    if os.path.exists(path1):
-        print('Moving %s' % file1)
-        shutil.move(path1, path2)
+    if not os.path.exists(path2):
+        print('Copying file %s to %s folder' % (fold1, val))
+        copy_tree(path1, path2)
         tissues = os.listdir(path2)
         for tt in tissues:
             path3 = os.path.join(path2, tt)
-            fn1 = os.listdir(path3)
-            fn2 = [x[0] + '_' + di_ID_both[x[1]] + '_' + x[2] for x in pd.Series(fn1).str.split('_', n=2)]
-            for f1, f2 in zip(fn1, fn2):
-                shutil.move(os.path.join(path3, f1), os.path.join(path3, f2))
+            fn1 = pd.Series(os.listdir(path3))
+            fn1_df = fn1.str.split('_',2,True).drop(columns=[0])
+            fn1_df.rename(columns = {1:'idt', 2:'fn'}, inplace=True)            
+            if fn1_df['idt'][0] in di_ID_both_rev:
+                print('Already anonymized')
+            else:
+                print('Needs to be anonymized')
+                fn2 = fn1.str.replace(fold1, di_ID_both[fold1])
+                fn1_path = path3 + '/' + fn1
+                fn2_path = path3 + '/' + fn2
+                [shutil.move(f1, f2) for f1, f2 in zip(fn1_path, fn2_path)]

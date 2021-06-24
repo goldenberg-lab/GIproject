@@ -7,33 +7,32 @@ import numpy as np
 import pandas as pd
 import cv2
 import gc
-
 import pathlib
 from datetime import datetime
-
-from funs_support import find_dir_GI, makeifnot
+from funs_support import find_dir_GI, makeifnot, random_crop
 
 ######################################
 # ------ STEP 1 CODE SET UP ------- #
 
+# Existing folder
 dir_base = find_dir_GI()
 dir_data = os.path.join(dir_base, 'data')
+dir_20x = os.path.join(dir_data, '20X')
 dir_images = os.path.join(dir_data, 'images')
+lst_dir = [dir_data, dir_images, dir_20x]
+assert all([os.path.exists(ff) for ff in lst_dir])
+# New folders
 dir_cleaned = os.path.join(dir_data, 'cleaned')
+makeifnot(dir_cleaned)
+dir_cropped = os.path.join(dir_data, 'cropped')
+makeifnot(dir_cropped)
+fold_cleaned = os.listdir(dir_cleaned)
 
-if not os.path.exists(dir_data) & os.path.exists(dir_images):
-    sys.exit('Error! data and image directory is not where it is expected')
-if not os.path.exists(dir_cleaned):
-    print('Creating cleaned folder')
-    os.mkdir(dir_cleaned)
 
 #########################################
 # ------ STEP 2: SORT NEW FILES ------- #
 #########################################
 
-# New patients
-dir_20x = os.path.join(dir_data, '20X')
-assert os.path.exists(dir_20x)
 # Load in the patient annotations
 dat_20x = pd.read_excel(os.path.join(dir_data, 'RI_NI_additional AI_moderate_severe_histotool.xlsx'))
 dat_20x = dat_20x.melt('idx', None, 'tissue', 'idt').dropna().drop(columns='idx')
@@ -49,7 +48,7 @@ idt_20x = list(np.intersect1d(idt_20x, dat_20x.idt))
 
 print('We have %i new rectal images' % (len(idt_20x)))
 
-# Loop through each and make a folder in the ~/data/images folder
+# Loop through NEW IMAGES and make a folder in the ~/data/images folder
 for idt in idt_20x:
     print('Patient: %s' % idt)
     dir_idt = os.path.join(dir_images, idt)
@@ -75,7 +74,8 @@ all_images = pd.concat([pd.DataFrame({'date': [
 all_images = all_images.assign(date=lambda x: pd.to_datetime(x.date)).sort_values(['idt', 'date']).reset_index(None,
                                                                                                                True)
 all_images = all_images.assign(year=lambda x: x.date.dt.strftime('%Y').astype(int))
-print(all_images.groupby('idt').year.var().fillna(0).reset_index().query('year>0'))
+assert np.all(all_images.groupby('idt').year.var().fillna(0) == 0)
+
 
 ########################################
 # ------ STEP 3: IMAGE PROCESS ------- #
@@ -140,83 +140,75 @@ for ii, fold in enumerate(fold_images):
             cv2.imwrite(path_out, col_ii, [cv2.IMWRITE_PNG_COMPRESSION, 2])
 
 ############################################
-# ------ STEP 2: APPLY RANDOM CROP ------- #
+# ------ STEP 4: APPLY RANDOM CROP ------- #
 ############################################
-
-# Original 33 ids
-idt_33 = ['S18-1638', 'S16-1251', 'S16-2650', 'S16-1255', 'S16-934', 'S16-4400', 'S16-3722', 'S18-1442', 'S17-1474',
-          'S18-1780', 'S17-2768', 'S18-490', 'S16-2858', 'S17-984', 'S16-3406', 'S17-3036', 'S16-4467', 'S16-1847',
-          'S16-4298', 'S17-6524', 'S16-3936', 'S16-4808', 'S16-2070', 'S17-6036', 'S16-4550', 'S17-5164', 'S16-2932',
-          'S18-1532', 'S16-2160', 'S17-2997', 'S17-1841', 'S16-838', 'S18-2236']
-assert len(np.setdiff1d(idt_33, all_images.idt.unique())) == 0
-
-fold_cleaned = os.listdir(dir_cleaned)
-dir_cropped = os.path.join(dir_data, 'cropped')
-makeifnot(dir_cropped)
 
 n_crop = 100
 size_crop = 500
 
-
-def random_crop(img, height, width, crop_size, ss):
-    np.random.seed(ss)
-    yidx = np.random.choice(np.arange(height - crop_size))
-    xidx = np.random.choice(np.arange(width - crop_size))
-    cropped = img[yidx:(yidx + crop_size + 1), xidx:(xidx + crop_size) + 1].copy()
-    return cropped, yidx, xidx
-
-
 # Load the existing index
-dat_idx_crops = pd.read_csv(os.path.join(dir_data, 'dat_idx_crops.csv'))
-old_idt = list(dat_idx_crops.idt.unique())
+old_dat_idx_crops = pd.read_csv(os.path.join(dir_data, 'dat_idx_crops.csv'))
+old_idt = list(old_dat_idx_crops.idt.unique())
 # Add on any IDs
 new_idt = list(np.setdiff1d(fold_cleaned, old_idt))
 if len(new_idt) > 0:
+    print('Adding new IDs to the dat_idx_crop')
     idt_all = old_idt + new_idt
 else:
+    print('Not adding IDs to the dat_idx_crop')
     idt_all = old_idt
 
 # Loop through each and move to a specific class folder
 holder = []
 for ii, fold in enumerate(idt_all):
-    print('----- Folder: %s (%i of %i) -----' % (fold, ii + 1, len(idt_all)))
     fold_ii = os.path.join(dir_cleaned, fold)
     out_ii = os.path.join(dir_cropped, fold)
-    makeifnot(out_ii)
-    # Get the tissue order
-    fn_ii = pd.Series(os.listdir(fold_ii))
-    if fold in old_idt:
-        print('Getting previous tissue order')
-        tmp_ii = list(dat_idx_crops.query('idt == @fold').tissue.unique())
-        tmp2_ii = [np.where(fn_ii.str.contains(t))[0][0] for t in tmp_ii]
-        fn_ii = list(fn_ii[tmp2_ii])
-    for jj, fn in enumerate(fn_ii):
-        tissue_jj = fn.split('_')[2].replace('.png', '')
-        out_jj = os.path.join(out_ii, tissue_jj)
-        makeifnot(out_jj)
-        # Load image
-        img_jj = cv2.imread(os.path.join(fold_ii, fn), cv2.IMREAD_COLOR)
-        height, width, channels = img_jj.shape
-        gc.collect()
-        kk, rr = 0, 0
-        while kk <= n_crop:
-            rr += 1
-            img_kk, yidx_kk, xidx_kk = random_crop(img_jj, height, width, size_crop, ii + jj + rr)
-            mu_kk = img_kk.mean() / 255
-            if mu_kk <= 0.95:
-                fn_kk = fn.replace('.png', '_' + str(kk) + '.png')
-                cv2.imwrite(os.path.join(out_jj, fn_kk), img_kk, [cv2.IMWRITE_PNG_COMPRESSION, 2])
-                tmp = pd.DataFrame({'idt': fold, 'tissue': tissue_jj, 'sample': kk,
-                                    'yidx': yidx_kk, 'xidx': xidx_kk}, index=[0])
-                kk += 1
-                holder.append(tmp)
-                if kk % 25 == 0:
-                    print('Crop %i of %i' % (kk, n_crop))
-# Merge the sample annotations
-dat_idx_crops = pd.concat(holder).reset_index(None, True)
+    if not os.path.exists(out_ii):
+        print('----- Folder: %s (%i of %i) -----' % (fold, ii + 1, len(idt_all)))
+        makeifnot(out_ii)
+        # Get the tissue order
+        fn_ii = pd.Series(os.listdir(fold_ii))
+        if fold in old_idt:
+            print('Getting previous tissue order')
+            tmp_ii = list(old_dat_idx_crops.query('idt == @fold').tissue.unique())
+            tmp2_ii = [np.where(fn_ii.str.contains(t))[0][0] for t in tmp_ii]
+            fn_ii = list(fn_ii[tmp2_ii])
+        for jj, fn in enumerate(fn_ii):
+            tissue_jj = fn.split('_')[2].replace('.png', '')
+            out_jj = os.path.join(out_ii, tissue_jj)
+            makeifnot(out_jj)
+            # Load image
+            img_jj = cv2.imread(os.path.join(fold_ii, fn), cv2.IMREAD_COLOR)
+            height, width, channels = img_jj.shape
+            gc.collect()
+            kk, rr = 0, 0
+            while kk <= n_crop:
+                rr += 1
+                img_kk, yidx_kk, xidx_kk = random_crop(img_jj, height, width, size_crop, ii + jj + rr)
+                mu_kk = img_kk.mean() / 255
+                if mu_kk <= 0.95:
+                    fn_kk = fn.replace('.png', '_' + str(kk) + '.png')
+                    cv2.imwrite(os.path.join(out_jj, fn_kk), img_kk, [cv2.IMWRITE_PNG_COMPRESSION, 2])
+                    tmp = pd.DataFrame({'idt': fold, 'tissue': tissue_jj, 'sample': kk,
+                                        'yidx': yidx_kk, 'xidx': xidx_kk}, index=[0])
+                    kk += 1
+                    holder.append(tmp)
+                    if kk % 25 == 0:
+                        print('Crop %i of %i' % (kk, n_crop))
+
+# Get positions
+if len(holder) > 0:
+    new_dat_idx_crops = pd.concat(holder)
+    # New with old files
+    idt_new = new_dat_idx_crops.idt.unique()
+    idt_existing = np.setdiff1d(idt_all, idt_new)
+    dat_idx_crops = pd.concat([new_dat_idx_crops, old_dat_idx_crops.query('idt.isin(@idt_existing)',engine='python')]).reset_index(None, True)
+else:
+    dat_idx_crops = old_dat_idx_crops.copy().reset_index(None, True)
+
 # Make sure it is all unique
 assert not dat_idx_crops.duplicated().any()
 dat_idx_crops.to_csv(os.path.join(dir_data, 'dat_idx_crops.csv'), index=False)
 
 # End of script
-print('------ END OF SCRIPT: image_clean.py -------')
+print('------ END OF SCRIPT: clean_crop.py -------')
