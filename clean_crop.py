@@ -9,7 +9,7 @@ import cv2
 import gc
 import pathlib
 from datetime import datetime
-from funs_support import find_dir_GI, makeifnot, random_crop
+from funs_support import find_dir_GI, makeifnot, random_crop, listfiles
 
 ######################################
 # ------ STEP 1 CODE SET UP ------- #
@@ -26,7 +26,7 @@ dir_cleaned = os.path.join(dir_data, 'cleaned')
 makeifnot(dir_cleaned)
 dir_cropped = os.path.join(dir_data, 'cropped')
 makeifnot(dir_cropped)
-fold_cleaned = os.listdir(dir_cleaned)
+fold_cleaned = listfiles(dir_cleaned)
 
 
 #########################################
@@ -40,7 +40,7 @@ assert not dat_20x.duplicated().any()
 di_tissue = {'Lower GI': 'Rectum', 'Upper GI': 'Upper'}
 dat_20x = dat_20x.assign(tissue=lambda x: x.tissue.map(di_tissue)).query('tissue=="Rectum"')
 # Get the list of svs files
-fn_20x = pd.Series(os.listdir(dir_20x))
+fn_20x = pd.Series(listfiles(dir_20x))
 idt_20x = fn_20x.str.split('\\s', 1, True).iloc[:, 0]
 assert not idt_20x.duplicated().any()
 print('Dropping non-matching patient: %s' % (np.setdiff1d(idt_20x, dat_20x.idt)))
@@ -65,12 +65,12 @@ for idt in idt_20x:
     else:
         print('File is already there')
 
-fold_images = os.listdir(dir_images)
+fold_images = listfiles(dir_images)
 print('There are %i total patient folders' % len(fold_images))
 
 all_images = pd.concat([pd.DataFrame({'date': [
     datetime.fromtimestamp(pathlib.Path(os.path.join(dir_images, idt, z)).stat().st_mtime).strftime('%Y-%m-%d') for z in
-    os.listdir(os.path.join(dir_images, idt))], 'idt': idt}) for idt in fold_images])
+    listfiles(os.path.join(dir_images, idt))], 'idt': idt}) for idt in fold_images])
 all_images = all_images.assign(date=lambda x: pd.to_datetime(x.date)).sort_values(['idt', 'date']).reset_index(None,
                                                                                                                True)
 all_images = all_images.assign(year=lambda x: x.date.dt.strftime('%Y').astype(int))
@@ -88,7 +88,7 @@ tissues = ['Cecum', 'Ascending', 'Transverse', 'Descending', 'Sigmoid', 'Rectum'
 for ii, fold in enumerate(fold_images):
     print('----- Folder: %s (%i of %i) -----' % (fold, ii + 1, len(fold_images)))
     fold_path = os.path.join(dir_images, fold)
-    tmp_fns = pd.Series(os.listdir(fold_path))
+    tmp_fns = pd.Series(listfiles(fold_path))
     tmp_split = tmp_fns.str.split('\\s\\(', expand=True)
     tmp_id = tmp_split.iloc[:, 0].unique()[0]
     if not tmp_id == fold:
@@ -166,8 +166,8 @@ for ii, fold in enumerate(idt_all):
     if not os.path.exists(out_ii):
         print('----- Folder: %s (%i of %i) -----' % (fold, ii + 1, len(idt_all)))
         makeifnot(out_ii)
-        # Get the tissue order
-        fn_ii = pd.Series(os.listdir(fold_ii))
+        # Get the tissue order (needs to be sorted to ensure identical results across systems)
+        fn_ii = pd.Series(listfiles(fold_ii))
         if fold in old_idt:
             print('Getting previous tissue order')
             tmp_ii = list(old_dat_idx_crops.query('idt == @fold').tissue.unique())

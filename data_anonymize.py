@@ -3,7 +3,7 @@ import shutil
 import numpy as np
 import pandas as pd
 import string
-from funs_support import find_dir_GI, makeifnot
+from funs_support import find_dir_GI, makeifnot, listfiles
 
 # directories
 dir_base = find_dir_GI()
@@ -57,7 +57,7 @@ df_anon.to_csv(os.path.join(dir_data, 'df_lbls_anon.csv'), index=False)
 print(df_merge.type.value_counts())
 
 # Repeat for the new patients within Nancy/Robarts score
-fn_cropped = pd.Series(os.listdir(dir_cropped))
+fn_cropped = pd.Series(listfiles(dir_cropped))
 fn_cropped = fn_cropped[fn_cropped.str.contains('\\-')].reset_index(None, True)
 u_ID_new = list(np.setdiff1d(fn_cropped, u_ID))
 df_new = pd.DataFrame({'ID': u_ID_new})
@@ -65,7 +65,14 @@ df_new = df_new.assign(type=lambda x: np.where(x.ID.str.contains(pat_test), 'tes
                        tissue='Rectum')
 df_new = df_new.assign(QID=lambda x: [''.join(list(np.random.choice(slist, 8))) for x in range(len(x))])
 di_ID_new = dict(zip(df_new.ID, df_new.QID))
-files_all = sum([os.listdir(os.path.join(dir_cleaned, fold)) for fold in os.listdir(dir_cleaned)], [])
+files_all = sum([listfiles(os.path.join(dir_cleaned, fold)) for fold in listfiles(dir_cleaned)], [])
+q1 = pd.Series(files_all)
+
+tmp = sum([listfiles(os.path.join(dir_cleaned, fold)) for fold in listfiles(dir_cleaned)], [])
+q2 = pd.Series(tmp)
+np.all(q1 == q2)
+
+
 files_new = pd.Series(np.setdiff1d(files_all, df_merge.file))
 q1 = pd.DataFrame({'ID': files_new.str.split('\\_|\\.', 2, True).iloc[:, 1], 'file': files_new})
 # q2 = pd.DataFrame({'ID':files_new})
@@ -100,10 +107,10 @@ for ii, rr in df_merge.iterrows():
     if not os.path.exists(path2):
         print('Copying file %s to %s folder' % (fold1, val))
         copy_tree(path1, path2)
-        tissues = os.listdir(path2)
+        tissues = listfiles(path2)
         for tt in tissues:
             path3 = os.path.join(path2, tt)
-            fn1 = pd.Series(os.listdir(path3))
+            fn1 = pd.Series(listfiles(path3))
             fn1_df = fn1.str.split('_',2,True).drop(columns=[0])
             fn1_df.rename(columns = {1:'idt', 2:'fn'}, inplace=True)            
             if fn1_df['idt'][0] in di_ID_both_rev:

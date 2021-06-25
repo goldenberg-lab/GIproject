@@ -17,6 +17,9 @@ def no_diff(x, y):
 	check = len(np.setdiff1d(uu, ii)) == 0
 	return check
 
+def listfiles(path):
+	return sorted(os.listdir(path))
+
 
 def find_dir_GI():
 	dir_base = os.getcwd()
