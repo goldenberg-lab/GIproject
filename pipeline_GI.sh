@@ -36,6 +36,8 @@ python data_anonymize.py
 #         ../data/df_codebreaker.csv
 #         ../data/cropped/{train/test}/{ID}/*.png
 
+return
+
 echo "STEP 5: TRAINING ORDINAL MODEL"
 python cnn_ordinal_nancy_robarts.py
 # output: ../data/di_ID.npy
