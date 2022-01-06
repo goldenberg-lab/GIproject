@@ -42,9 +42,10 @@ dat_20x = dat_20x.assign(tissue=lambda x: x.tissue.map(di_tissue)).query('tissue
 # Get the list of svs files
 fn_20x = pd.Series(listfiles(dir_20x))
 idt_20x = fn_20x.str.split('\\s', 1, True).iloc[:, 0]
+idt_20x = idt_20x[idt_20x.str.contains('^S')].reset_index(None, True)
 assert not idt_20x.duplicated().any()
-print('Dropping non-matching patient: %s' % (np.setdiff1d(idt_20x, dat_20x.idt)))
-idt_20x = list(np.intersect1d(idt_20x, dat_20x.idt))
+# print('Dropping non-matching patient: %s' % (np.setdiff1d(idt_20x, dat_20x.idt)))
+# idt_20x = list(np.intersect1d(idt_20x, dat_20x.idt))
 
 print('We have %i new rectal images' % (len(idt_20x)))
 
