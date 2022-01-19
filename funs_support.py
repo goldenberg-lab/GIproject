@@ -20,6 +20,8 @@ def no_diff(x, y):
 def listfiles(path):
 	return sorted(os.listdir(path))
 
+def listfolds(path):
+	return [d for d in os.listdir(path) if os.path.isdir(os.path.join(path, d))]
 
 def find_dir_GI():
 	dir_base = os.getcwd()
