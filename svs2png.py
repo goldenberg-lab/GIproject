@@ -11,17 +11,53 @@ from funs_support import find_dir_GI, makeifnot, listfolds
 dir_base = find_dir_GI()
 dir_data = os.path.join(dir_base, 'data')
 dir_WSI = os.path.join(dir_data, 'cidscann_WSI')
+dir_svs = os.path.join(dir_WSI, 'svs')
+makeifnot(dir_svs)
 dir_png = os.path.join(dir_WSI, 'png')
 makeifnot(dir_png)
 dir_jpg = os.path.join(dir_WSI, 'jpg')
 makeifnot(dir_jpg)
 di_fmt = {'png':dir_png, 'jpg':dir_jpg}
 
-# -- CONVERT EACH TO A PNG AND A JPG -- #
+folds_WSI = pd.Series(os.listdir(dir_WSI))
+folds_WSI = list(folds_WSI[folds_WSI.str.contains('cidscann\\_[0-9]',regex=True)])
+
+
+####################################
+# ----- (1) CREATE CSV LIST ------ #
+
+# For https://github.com/pearcetm/svs-deidentifier
+
+jj = 0
+holder = []
+for fold in folds_WSI:
+    dir_fold = os.path.join(dir_WSI, fold)
+    mags = listfolds(dir_fold)
+    for mag in mags:
+        dir_mag = os.path.join(dir_fold, mag)
+        fn_mag = pd.Series(os.listdir(dir_mag))
+        fn_mag = fn_mag[fn_mag.str.contains('\\.svs$',regex=True)]
+        path_from = [os.path.join(dir_mag, fn) for fn in fn_mag]
+        # Create identical path to svs folder
+        fold_svs = os.path.join(dir_svs, fold, mag)
+        if not os.path.exists(fold_svs):
+            os.makedirs(fold_svs)
+        path_to = [os.path.join(fold_svs, fn) for fn in fn_mag]
+        tmp_df = pd.DataFrame({'source':path_from, 'destination':path_to})
+        holder.append(tmp_df)
+df_svs = pd.concat(holder).reset_index(drop=True)
+df_svs.to_csv(os.path.join(dir_WSI,'path_to_svs.csv'),index=False)
+# df_svs.loc[10]['source']
+# df_svs.loc[10]['destination']
+
+
+##########@@####################
+# --- (2) CONVERT PNG & JPG -- #
+
 lst_fmt = ['png', 'jpg']
 # Loop over each folder
 jj = 0
-for fold in os.listdir(dir_WSI):
+for fold in folds_WSI:
     dir_fold = os.path.join(dir_WSI, fold)
     for mag in listfolds(dir_fold):
         dir_mag = os.path.join(dir_fold, mag)
